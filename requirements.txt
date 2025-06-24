@@ -1,0 +1,38 @@
+
+---
+
+## 🛠 Tech Stack
+
+- **Dash** – For interactive dashboard UI
+- **Plotly** – High-quality plotting and visualizations
+- **Pandas** – Data processing and analysis
+- **Seaborn + Matplotlib** – Visual enhancement and customization
+- **ReportLab** – PDF report generation
+
+---
+
+## 🚀 How to Run
+
+1. Clone the repository:
+
+```bash
+git clone https://github.com/your_username/covid19-impact-analysis-dashboard.git
+cd covid19-impact-analysis-dashboard
+
+
+---
+
+### 📦 `requirements.txt`
+
+```txt
+dash
+pandas
+plotly
+numpy
+matplotlib
+seaborn
+reportlab
+scikit-learn
+openpyxl
+tqdm
+missingno
