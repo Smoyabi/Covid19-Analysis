@@ -16,10 +16,9 @@ warnings.filterwarnings('ignore')
 def load_and_prepare_data():
     """Load and clean the COVID-19 dataset"""
     try:
-        df = pd.read_csv(
-            r"C:\Users\sammi\OneDrive\Documents\Covid Analysis\Covid_Analysis_Data.csv",
-            parse_dates=['date']
-        )
+        df = pd.read_csv("Covid_Analysis_Data.csv", parse_dates=['date'])
+
+        
         
         # Clean data
         df = df.dropna(subset=['date', 'location', 'total_cases', 'total_deaths', 'population'])
