@@ -57,14 +57,34 @@ app = dash.Dash(__name__,
 
 app.title = "COVID-19 Professional Dashboard"
 
-# Static file serving route
-@server.route("/static/<path:path>")
-def serve_static(path):
-    """Serve static files from the static directory"""
+# Static file serving routes - Fixed for production
+@server.route("/static/<path:filename>")
+def serve_static(filename):
+    """Serve static files"""
     try:
-        return send_from_directory("static", path)
+        # Check if file exists in static directory
+        static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
+        if os.path.exists(os.path.join(static_dir, filename)):
+            return send_from_directory(static_dir, filename)
+        else:
+            print(f"Static file not found: {filename}")
+            abort(404)
     except Exception as e:
-        print(f"Error serving static file {path}: {e}")
+        print(f"Error serving static file {filename}: {e}")
+        abort(404)
+
+@server.route("/static/images/<path:filename>")
+def serve_images(filename):
+    """Serve image files from static/images directory"""
+    try:
+        images_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'images')
+        if os.path.exists(os.path.join(images_dir, filename)):
+            return send_from_directory(images_dir, filename)
+        else:
+            print(f"Image file not found: {filename}")
+            abort(404)
+    except Exception as e:
+        print(f"Error serving image file {filename}: {e}")
         abort(404)
 
 # Define color scheme
@@ -132,10 +152,6 @@ custom_styles = {
         'boxShadow': '0 4px 12px rgba(0,0,0,0.05)',
         'border': '1px solid #e9ecef',
         'transition': 'transform 0.2s ease, box-shadow 0.2s ease'
-    },
-    'kpi-card:hover': {
-        'transform': 'translateY(-2px)',
-        'boxShadow': '0 8px 24px rgba(0,0,0,0.1)'
     },
     'kpi-icon': {
         'fontSize': '2.5rem',
@@ -205,7 +221,21 @@ custom_styles = {
         'width': '100%',
         'height': 'auto',
         'borderRadius': '8px',
-        'boxShadow': '0 2px 8px rgba(0,0,0,0.1)'
+        'boxShadow': '0 2px 8px rgba(0,0,0,0.1)',
+        'maxWidth': '100%'
+    },
+    'placeholder-chart': {
+        'width': '100%',
+        'height': '400px',
+        'backgroundColor': colors['light'],
+        'borderRadius': '8px',
+        'display': 'flex',
+        'alignItems': 'center',
+        'justifyContent': 'center',
+        'border': f'2px dashed {colors["gray"]}',
+        'color': colors['gray'],
+        'fontSize': '1.2rem',
+        'fontWeight': '500'
     }
 }
 
@@ -230,19 +260,20 @@ def format_number(num):
     else:
         return f"{num:,.0f}"
 
-def encode_image(image_path):
-    """Encode image to base64 for embedding"""
-    try:
-        if os.path.exists(image_path):
-            with open(image_path, 'rb') as f:
-                encoded = base64.b64encode(f.read()).decode()
-            return f"data:image/png;base64,{encoded}"
-        else:
-            print(f"Image not found: {image_path}")
-            return None
-    except Exception as e:
-        print(f"Error encoding image {image_path}: {e}")
-        return None
+def check_file_exists(file_path):
+    """Check if file exists and return appropriate path"""
+    if os.path.exists(file_path):
+        return True
+    else:
+        print(f"File not found: {file_path}")
+        return False
+
+def create_placeholder_div(message):
+    """Create a placeholder div for missing images"""
+    return html.Div(
+        message,
+        style=custom_styles['placeholder-chart']
+    )
 
 # App Layout
 app.layout = html.Div([
@@ -302,7 +333,7 @@ app.layout = html.Div([
         
     ], style=custom_styles['controls-container']),
     
-    # PDF Report Download Section (Updated for deployment)
+    # PDF Report Download Section
     html.Div([
         html.H3("📊 Professional Report Available", style={'color': colors['primary'], 'marginBottom': '15px'}),
         html.P("Download the comprehensive COVID-19 analysis report with detailed insights and visualizations.", 
@@ -323,14 +354,14 @@ app.layout = html.Div([
         })
     ], style={**custom_styles['download-section'], **{'maxWidth': '1200px', 'margin': '0 auto 30px auto', 'marginLeft': '20px', 'marginRight': '20px'}}),
     
-    # Static Charts Section (Updated for deployment)
+    # Static Charts Section
     html.Div([
         html.H2("Report Visualizations", style={'textAlign': 'center', 'color': colors['primary'], 'marginBottom': '30px'}),
         
         # Global Cases and Deaths Chart
         html.Div([
             html.H3("Global COVID-19 Cases and Deaths Overview", style={'color': colors['secondary'], 'marginBottom': '15px'}),
-            html.Img(id='global-chart', style=custom_styles['static-chart']),
+            html.Div(id='global-chart-container'),
             html.P("This visualization shows the global progression of COVID-19 cases and deaths, highlighting key trends and patterns observed throughout the pandemic.", 
                    style={'marginTop': '15px', 'fontStyle': 'italic', 'color': colors['gray']})
         ], style=custom_styles['chart-card']),
@@ -338,7 +369,7 @@ app.layout = html.Div([
         # Kenya Trend Chart
         html.Div([
             html.H3("COVID-19 Trends in Kenya", style={'color': colors['secondary'], 'marginBottom': '15px'}),
-            html.Img(id='kenya-chart', style=custom_styles['static-chart']),
+            html.Div(id='kenya-chart-container'),
             html.P("Detailed analysis of Kenya's COVID-19 trajectory, showcasing the country's unique pandemic experience and response effectiveness.", 
                    style={'marginTop': '15px', 'fontStyle': 'italic', 'color': colors['gray']})
         ], style=custom_styles['chart-card']),
@@ -346,7 +377,7 @@ app.layout = html.Div([
         # Correlation Heatmap
         html.Div([
             html.H3("Statistical Correlation Analysis", style={'color': colors['secondary'], 'marginBottom': '15px'}),
-            html.Img(id='correlation-chart', style=custom_styles['static-chart']),
+            html.Div(id='correlation-chart-container'),
             html.P("Advanced correlation matrix revealing relationships between various COVID-19 metrics and demographic factors.", 
                    style={'marginTop': '15px', 'fontStyle': 'italic', 'color': colors['gray']})
         ], style=custom_styles['chart-card']),
@@ -421,40 +452,55 @@ app.layout = html.Div([
     
 ], style=custom_styles['dashboard-container'])
 
-# Callback to load static images (Updated for deployment)
+# Callback to load static images with better error handling
 @app.callback(
-    [Output('global-chart', 'src'),
-     Output('kenya-chart', 'src'),
-     Output('correlation-chart', 'src')],
+    [Output('global-chart-container', 'children'),
+     Output('kenya-chart-container', 'children'),
+     Output('correlation-chart-container', 'children')],
     [Input('country-dropdown', 'value')]  # Dummy input to trigger callback
 )
 def load_static_images(selected_country):
-    """Load static chart images from the static/images directory"""
+    """Load static chart images with improved error handling"""
     
-    # Try to load images from static directory
-    static_img_paths = [
-        "static/images/global_cases_deaths.png",
-        "static/images/kenya_trend.png", 
-        "static/images/correlation_heatmap.png"
+    # Image configurations
+    image_configs = [
+        {
+            'filename': 'global_cases_deaths.png',
+            'alt': 'Global Cases and Deaths Chart',
+            'placeholder': 'Global COVID-19 Cases and Deaths Chart Not Available'
+        },
+        {
+            'filename': 'kenya_trend.png',
+            'alt': 'Kenya Trend Chart',
+            'placeholder': 'Kenya COVID-19 Trend Chart Not Available'
+        },
+        {
+            'filename': 'correlation_heatmap.png',
+            'alt': 'Correlation Heatmap',
+            'placeholder': 'Statistical Correlation Heatmap Not Available'
+        }
     ]
     
-    images = []
-    for img_path in static_img_paths:
-        encoded_img = encode_image(img_path)
-        if encoded_img is None:
-            # Fallback: try to serve via static URL if file exists
-            try:
-                if os.path.exists(img_path):
-                    images.append(f"/{img_path}")
-                else:
-                    # Create placeholder image URL or use a default
-                    images.append("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iI2Y4ZjlmYSIvPjx0ZXh0IHg9IjIwMCIgeT0iMTUwIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiM2Yzc1N2QiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkNoYXJ0IEltYWdlIE5vdCBBdmFpbGFibGU8L3RleHQ+PC9zdmc+")
-            except:
-                images.append("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iI2Y4ZjlmYSIvPjx0ZXh0IHg9IjIwMCIgeT0iMTUwIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiM2Yzc1N2QiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkNoYXJ0IEltYWdlIE5vdCBBdmFpbGFibGU8L3RleHQ+PC9zdmc+")
-        else:
-            images.append(encoded_img)
+    containers = []
     
-    return images[0], images[1], images[2]
+    for config in image_configs:
+        # Check if image file exists
+        image_path = os.path.join('static', 'images', config['filename'])
+        
+        if check_file_exists(image_path):
+            # Image exists, create img element with URL
+            container = html.Img(
+                src=f"/static/images/{config['filename']}",
+                alt=config['alt'],
+                style=custom_styles['static-chart']
+            )
+        else:
+            # Image doesn't exist, create placeholder
+            container = create_placeholder_div(config['placeholder'])
+        
+        containers.append(container)
+    
+    return containers[0], containers[1], containers[2]
 
 # Callback for KPI cards
 @app.callback(
@@ -610,5 +656,28 @@ def update_interactive_charts(selected_country, comparison_countries, start_date
     return fig_trends, fig_comparison, fig_scatter, fig_bar, table_data
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 8050))  # Default to 8050 for local testing
-    app.run(host="0.0.0.0", port=port, debug=False)  # Set debug=False for production
+    # Get port from environment variable or default to 8050
+    port = int(os.environ.get("PORT", 8050))
+    
+    # Set debug based on environment
+    debug_mode = os.environ.get("DEBUG", "False").lower() == "true"
+    
+    print(f"Starting COVID-19 Dashboard on port {port}")
+    print(f"Debug mode: {debug_mode}")
+    
+    # Check if critical files exist
+    required_files = [
+        "Covid_Analysis_Data.csv",
+        "static/Professional_Covid_Report.pdf",
+        "static/images/global_cases_deaths.png",
+        "static/images/kenya_trend.png", 
+        "static/images/correlation_heatmap.png"
+    ]
+    
+    for file_path in required_files:
+        if os.path.exists(file_path):
+            print(f"✓ Found: {file_path}")
+        else:
+            print(f"✗ Missing: {file_path}")
+    
+    app.run(host="0.0.0.0", port=port, debug=debug_mode)
