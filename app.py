@@ -577,8 +577,5 @@ def download_report():
         return f"Error downloading report: {str(e)}", 404
 
 if __name__ == '__main__':
-    print("🚀 Starting COVID-19 Professional Dashboard...")
-    print("📊 Loading data and initializing components...")
-    print("🌐 Dashboard will be available at: http://127.0.0.1:8050/")
-    print("📄 PDF Report download available in the dashboard")
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 8050))  # Default to 8050 for local testing
+    app.run(host="0.0.0.0", port=port, debug=True)
