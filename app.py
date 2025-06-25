@@ -8,17 +8,19 @@ import numpy as np
 from datetime import datetime, timedelta
 import base64
 import os
-from flask import send_file
+import flask
+from flask import send_from_directory, abort
 import warnings
 warnings.filterwarnings('ignore')
+
+# Initialize Flask server first
+server = flask.Flask(__name__)
 
 # Load and prepare data
 def load_and_prepare_data():
     """Load and clean the COVID-19 dataset"""
     try:
         df = pd.read_csv("Covid_Analysis_Data.csv", parse_dates=['date'])
-
-        
         
         # Clean data
         df = df.dropna(subset=['date', 'location', 'total_cases', 'total_deaths', 'population'])
@@ -45,14 +47,25 @@ def load_and_prepare_data():
 # Load data
 df = load_and_prepare_data()
 
-# Initialize Dash app with external stylesheets
+# Initialize Dash app with Flask server
 app = dash.Dash(__name__, 
+                server=server,
                 external_stylesheets=[
                     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css',
                     'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap'
                 ])
 
 app.title = "COVID-19 Professional Dashboard"
+
+# Static file serving route
+@server.route("/static/<path:path>")
+def serve_static(path):
+    """Serve static files from the static directory"""
+    try:
+        return send_from_directory("static", path)
+    except Exception as e:
+        print(f"Error serving static file {path}: {e}")
+        abort(404)
 
 # Define color scheme
 colors = {
@@ -220,10 +233,15 @@ def format_number(num):
 def encode_image(image_path):
     """Encode image to base64 for embedding"""
     try:
-        with open(image_path, 'rb') as f:
-            encoded = base64.b64encode(f.read()).decode()
-        return f"data:image/png;base64,{encoded}"
-    except:
+        if os.path.exists(image_path):
+            with open(image_path, 'rb') as f:
+                encoded = base64.b64encode(f.read()).decode()
+            return f"data:image/png;base64,{encoded}"
+        else:
+            print(f"Image not found: {image_path}")
+            return None
+    except Exception as e:
+        print(f"Error encoding image {image_path}: {e}")
         return None
 
 # App Layout
@@ -284,21 +302,28 @@ app.layout = html.Div([
         
     ], style=custom_styles['controls-container']),
     
-    # PDF Report Download Section
+    # PDF Report Download Section (Updated for deployment)
     html.Div([
         html.H3("📊 Professional Report Available", style={'color': colors['primary'], 'marginBottom': '15px'}),
         html.P("Download the comprehensive COVID-19 analysis report with detailed insights and visualizations.", 
                style={'marginBottom': '20px', 'fontSize': '1.1rem'}),
         html.A([
             html.I(className="fas fa-download", style={'marginRight': '8px'}),
-            "Download Professional Report (PDF)"
+            "📥 Download Professional Report (PDF)"
         ], 
-        href="/download-report",
-        style=custom_styles['download-button'],
-        target="_blank")
+        href="/static/Professional_Covid_Report.pdf",
+        target="_blank",
+        style={
+            **custom_styles['download-button'],
+            'display': 'block',
+            'margin': '20px auto',
+            'fontWeight': 'bold',
+            'textAlign': 'center',
+            'width': 'fit-content'
+        })
     ], style={**custom_styles['download-section'], **{'maxWidth': '1200px', 'margin': '0 auto 30px auto', 'marginLeft': '20px', 'marginRight': '20px'}}),
     
-    # Static Charts Section (from your images directory)
+    # Static Charts Section (Updated for deployment)
     html.Div([
         html.H2("Report Visualizations", style={'textAlign': 'center', 'color': colors['primary'], 'marginBottom': '30px'}),
         
@@ -396,7 +421,7 @@ app.layout = html.Div([
     
 ], style=custom_styles['dashboard-container'])
 
-# Callback to load static images
+# Callback to load static images (Updated for deployment)
 @app.callback(
     [Output('global-chart', 'src'),
      Output('kenya-chart', 'src'),
@@ -404,14 +429,32 @@ app.layout = html.Div([
     [Input('country-dropdown', 'value')]  # Dummy input to trigger callback
 )
 def load_static_images(selected_country):
-    """Load static chart images from the images directory"""
-    img_dir = r"C:\Users\sammi\OneDrive\Documents\Covid Analysis\images"
+    """Load static chart images from the static/images directory"""
     
-    global_img = encode_image(os.path.join(img_dir, "global_cases_deaths.png"))
-    kenya_img = encode_image(os.path.join(img_dir, "kenya_trend.png"))
-    correlation_img = encode_image(os.path.join(img_dir, "correlation_heatmap.png"))
+    # Try to load images from static directory
+    static_img_paths = [
+        "static/images/global_cases_deaths.png",
+        "static/images/kenya_trend.png", 
+        "static/images/correlation_heatmap.png"
+    ]
     
-    return global_img, kenya_img, correlation_img
+    images = []
+    for img_path in static_img_paths:
+        encoded_img = encode_image(img_path)
+        if encoded_img is None:
+            # Fallback: try to serve via static URL if file exists
+            try:
+                if os.path.exists(img_path):
+                    images.append(f"/{img_path}")
+                else:
+                    # Create placeholder image URL or use a default
+                    images.append("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iI2Y4ZjlmYSIvPjx0ZXh0IHg9IjIwMCIgeT0iMTUwIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiM2Yzc1N2QiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkNoYXJ0IEltYWdlIE5vdCBBdmFpbGFibGU8L3RleHQ+PC9zdmc+")
+            except:
+                images.append("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iI2Y4ZjlmYSIvPjx0ZXh0IHg9IjIwMCIgeT0iMTUwIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiM2Yzc1N2QiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkNoYXJ0IEltYWdlIE5vdCBBdmFpbGFibGU8L3RleHQ+PC9zdmc+")
+        else:
+            images.append(encoded_img)
+    
+    return images[0], images[1], images[2]
 
 # Callback for KPI cards
 @app.callback(
@@ -566,16 +609,6 @@ def update_interactive_charts(selected_country, comparison_countries, start_date
     
     return fig_trends, fig_comparison, fig_scatter, fig_bar, table_data
 
-# Route for PDF download
-@app.server.route('/download-report')
-def download_report():
-    """Serve the PDF report for download"""
-    report_path = r"C:\Users\sammi\OneDrive\Documents\Covid Analysis\Professional_Covid_Report.pdf"
-    try:
-        return send_file(report_path, as_attachment=True, download_name="COVID19_Analysis_Report.pdf")
-    except Exception as e:
-        return f"Error downloading report: {str(e)}", 404
-
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 8050))  # Default to 8050 for local testing
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=port, debug=False)  # Set debug=False for production
